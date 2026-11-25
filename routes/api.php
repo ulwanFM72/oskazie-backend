@@ -49,6 +49,7 @@ Route::middleware(['auth:sanctum', 'abilities:admin'])->prefix('admin')->group(f
     Route::patch('/elections/{election}/end', [ElectionController::class, 'endEarly']);
     Route::post('/elections/{election}/finalize', [ElectionController::class, 'finalize']);
     Route::post('/elections/{election}/publish', [ElectionController::class, 'publish']);
+    Route::delete('/elections/{election}', [ElectionController::class, 'destroy']);
 
     // Laporan
     Route::get('/elections/{election}/turnout', [ReportController::class, 'turnout']);

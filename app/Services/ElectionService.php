@@ -10,6 +10,7 @@ use App\Models\Voter;
 use App\Support\AuditLogger;
 use App\Support\Iso8601;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ElectionService
 {
@@ -213,6 +214,47 @@ class ElectionService
 
             return $election;
         });
+    }
+
+    /**
+     * Hapus pemilihan beserta suara, catatan partisipasi, DPT, dan paslonnya.
+     * Data pemilih (voters), akun admin, dan audit log TIDAK ikut terhapus.
+     * Pemilihan yang sedang berlangsung tidak boleh dihapus (akhiri dulu).
+     */
+    public function delete(int $electionId, User $admin): array
+    {
+        $photos = [];
+
+        $summary = DB::transaction(function () use ($electionId, $admin, &$photos) {
+            $election = Election::lockForUpdate()->findOrFail($electionId);
+
+            if ($election->status() === 'berlangsung') {
+                throw new ApiException('Pemilihan yang sedang berlangsung tidak dapat dihapus. Akhiri pemilihan terlebih dahulu.', 409, 'election_running');
+            }
+
+            $photos = DB::table('candidates')->where('election_id', $election->id)->whereNotNull('photo_path')->pluck('photo_path')->all();
+
+            // Urutan mengikuti foreign key: votes -> vote_participations -> election_voters -> candidates -> elections.
+            $summary = [
+                'name' => $election->name,
+                'status' => $election->status(),
+                'votes' => DB::table('votes')->where('election_id', $election->id)->delete(),
+                'participations' => DB::table('vote_participations')->where('election_id', $election->id)->delete(),
+                'registered' => DB::table('election_voters')->where('election_id', $election->id)->delete(),
+                'candidates' => DB::table('candidates')->where('election_id', $election->id)->delete(),
+            ];
+            $election->delete();
+
+            AuditLogger::record($admin->id, 'election.delete', 'election', $electionId, $this->snapshot($election), $summary);
+
+            return $summary;
+        });
+
+        foreach ($photos as $photo) {
+            Storage::disk('public')->delete($photo);
+        }
+
+        return $summary;
     }
 
     private function snapshot(Election $election): array

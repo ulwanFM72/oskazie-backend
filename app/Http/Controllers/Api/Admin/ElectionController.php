@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\DestroyElectionRequest;
 use App\Http\Requests\EndElectionRequest;
 use App\Http\Requests\ExtendElectionRequest;
 use App\Http\Requests\StoreElectionRequest;
@@ -81,5 +82,13 @@ class ElectionController extends Controller
         $election = $this->elections->publish($election->id, $request->user());
 
         return response()->json(['data' => $election->toApi()]);
+    }
+
+    /** Hapus pemilihan (dan datanya). Wajib konfirmasi HAPUS. */
+    public function destroy(DestroyElectionRequest $request, Election $election): JsonResponse
+    {
+        $summary = $this->elections->delete($election->id, $request->user());
+
+        return response()->json(['data' => $summary]);
     }
 }
